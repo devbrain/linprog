@@ -14,11 +14,13 @@
 
 //#define DEBUG_INI
 
-static const double EPSILON = 0.00001;
+//#define DEBUG_ILP
+
+//static const double EPSILON = 0.00001;
+static const double EPSILON = 0.00000001;
 // -----------------------------------------------------------------
 static bool is_zero(double x)
 {
-    
     return std::abs(x) < EPSILON;
 }
 // -----------------------------------------------------------------
@@ -29,6 +31,7 @@ static bool eq(double x, double y)
 // -----------------------------------------------------------------
 static bool gt(double x, double y)
 {
+
     if (eq(x, y))
     {
         return false;
@@ -49,6 +52,17 @@ static bool lt(double x, double y)
 static bool lte(double x, double y)
 {
     return eq(x, y) || lt(x, y);
+}
+// -----------------------------------------------------------------
+static double frac(double x)
+{
+	return x - std::floor(x);
+}
+// -----------------------------------------------------------------
+static bool is_integral(double x)
+{
+	return ((x - floor(x) < EPSILON) || (x - floor(x) > 1.0-EPSILON));
+	//return std::abs(frac(x)) < EPSILON;
 }
 // -----------------------------------------------------------------
 dictionary::dictionary(const problem_description& pd)
@@ -455,7 +469,7 @@ void dictionary::restore_original_objective(const row_t& original_coeffs, const 
 	std::vector <unsigned> I = non_basic;
 
 	
-	for (int i = 0; i < pd.n; i++)
+	for (unsigned int i = 0; i < pd.n; i++)
 	{
 		new_coeffs.push_back(-1);
 	}
@@ -467,11 +481,9 @@ void dictionary::restore_original_objective(const row_t& original_coeffs, const 
 	
 }
 // -------------------------------------------------------------------
-dictionary::solution_t dictionary::solve(const problem_description& pd, double& result, std::size_t* steps)
+dictionary::solution_t dictionary::solve(dictionary& d, double& result, const problem_description& pd, std::size_t* steps)
 {
-	dictionary d(pd);
-
-	if (!d.feasible ())
+	if (!d.feasible())
 	{
 #if defined(DEBUG_INI)
 		std::cout << "PRIMAL" << std::endl;
@@ -484,13 +496,13 @@ dictionary::solution_t dictionary::solve(const problem_description& pd, double& 
 		{
 			d.coeffs[i] = -1.0;
 		}
-		d.dualize ();
+		d.dualize();
 #if defined(DEBUG_INI)		
 		std::cout << "DUAL" << std::endl;
 		std::cout << d << std::endl;
 #endif
 		assert(d.feasible());
-		
+
 		while (true)
 		{
 			const result_t rc = d.pivot();
@@ -510,8 +522,8 @@ dictionary::solution_t dictionary::solve(const problem_description& pd, double& 
 		std::cout << "Final dual" << std::endl;
 		std::cout << d << std::endl;
 #endif
-		
-		d.dualize ();
+
+		d.dualize();
 #if defined(DEBUG_INI)		
 		std::cout << "Primal with biased objective" << std::endl;
 		std::cout << d << std::endl;
@@ -524,15 +536,15 @@ dictionary::solution_t dictionary::solve(const problem_description& pd, double& 
 #endif
 	}
 
-    while (true)
-    {
+	while (true)
+	{
 #if defined(DEBUG)
-        std::cout << d << std::endl;
-        std::cout << "Feasible: " << d.feasible() << std::endl;
+		std::cout << d << std::endl;
+		std::cout << "Feasible: " << d.feasible() << std::endl;
 #endif
-        const result_t rc = d.pivot();
-        if (rc != CONT)
-        {
+		const result_t rc = d.pivot();
+		if (rc != CONT)
+		{
 			if (rc == DONE)
 			{
 				if (steps)
@@ -546,10 +558,108 @@ dictionary::solution_t dictionary::solve(const problem_description& pd, double& 
 			{
 				return eUNBOUNDED;
 			}
-        }
-    }
+		}
+	}
 	assert(false);
 	return eFINAL;
+}
+// -------------------------------------------------------------------
+dictionary::solution_t dictionary::solve(const problem_description& pd, double& result, std::size_t* steps)
+{
+	dictionary d(pd);
+	return solve(d, result, pd, steps);
+}
+// -------------------------------------------------------------------
+void dictionary::get_fractional_rows(std::vector <unsigned>& rows) const
+{
+	rows.reserve(m);
+	for (unsigned i = 0; i < m; i++)
+	{
+		if (!is_integral(matrix[i][0]))
+		{
+			rows.push_back(i);
+		}
+	}
+}
+// -------------------------------------------------------------------
+void dictionary::add_cutting_planes(const std::vector <unsigned>& rows)
+{
+	unsigned new_var_index = m + n + 1;
+	for (std::size_t ri = 0; ri < rows.size(); ri++)
+	{
+		const unsigned r = rows[ri];
+		std::vector <double> constraint(n + 1);
+		constraint[0] = -frac(matrix[r][0]);
+		for (unsigned i = 1; i <= n; i++)
+		{
+			constraint[i] = frac(-matrix[r][i]);
+		}
+		matrix.push_back(constraint);
+		basic.push_back(new_var_index++);
+		m++;
+	}
+}
+// -------------------------------------------------------------------
+dictionary::solution_t dictionary::ilp_solve(const problem_description& pd, double& result)
+{
+	dictionary d(pd);
+#if defined(DEBUG_ILP)
+	std::cout << "Initial: " << std::endl
+		<< d << std::endl;
+#endif
+	solution_t s = solve(d, result, pd);
+	if (s != eFINAL)
+	{
+		return s;
+	}
+
+	while (true)
+	{
+#if defined(DEBUG_ILP)
+		std::cout << "Relaxed: " << std::endl
+			<< d << std::endl;
+#endif
+		std::vector <unsigned> fractional_rows;
+		d.get_fractional_rows(fractional_rows);
+		if (fractional_rows.empty())
+		{
+			return eFINAL;
+		}
+#if defined(DEBUG_ILP)
+		std::cout << "Fractional rows: ";
+		for (std::size_t i = 0; i < fractional_rows.size(); i++)
+		{
+			std::cout << fractional_rows [i] << " ";
+		}
+		std::cout << std::endl;
+#endif
+		d.add_cutting_planes(fractional_rows);
+#if defined(DEBUG_ILP)
+		std::cout << "Cutting Planes: " << std::endl
+			<< d << std::endl;
+#endif
+		assert(!d.feasible());
+		d.dualize();
+		assert(d.feasible());
+		bool solved = false;
+		while (!solved)
+		{
+			const result_t rc = d.pivot();
+			if (rc != CONT)
+			{
+				if (rc == DONE)
+				{
+					solved = true;
+				}
+				else
+				{
+					return eINFEASIBLE;
+				}
+			}
+		}
+		d.dualize();
+		result = d.z();
+	}
 }
 // -------------------------------------------------------------------
 dictionary::result_t dictionary::pivot()

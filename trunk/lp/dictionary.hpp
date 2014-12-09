@@ -33,6 +33,9 @@ public:
     double z() const;
 
 	static solution_t solve(const problem_description& pd, double& result, std::size_t* steps = 0);
+	static solution_t solve(dictionary& d, double& result, const problem_description& pd, std::size_t* steps = 0);
+
+	static solution_t ilp_solve(const problem_description& pd, double& result);
 
     result_t pivot(unsigned& var_enter, unsigned& var_leave);
 	result_t pivot();
@@ -66,7 +69,8 @@ private:
 	void change_basis(const std::vector <unsigned>& B, const std::vector <unsigned>& I, const std::vector <double>& orig_coeffs);
 
 	void restore_original_objective(const row_t& original_coeffs, const problem_description& pd);
-
+	void get_fractional_rows(std::vector <unsigned>& rows) const;
+	void add_cutting_planes(const std::vector <unsigned>& rows);
 private:
     unsigned m;
     unsigned n;

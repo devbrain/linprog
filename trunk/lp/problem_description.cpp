@@ -6,7 +6,7 @@
 problem_description::problem_description(const char* path)
 {
     std::ifstream ifs(path);
-    if (!ifs.good())
+    if (!ifs || !ifs.good())
     {
         throw std::runtime_error("file not found");
     }
