@@ -282,7 +282,153 @@ void run_assignment_3(const std::string& base_dir, int test_num)
 
 }
 // -------------------------------------------------------------------------------
+bool run_test_4 (const std::string& base_dir, int test_num, bool f)
+{
+	std::ostringstream os;
+	if (!f)
+	{
+		os << base_dir << "/test" << test_num;
+	}
+	else
+	{
+		os << base_dir << "/ilpTest" << test_num;
+	}
+	problem_description pd(os.str().c_str());
+	double res;
+	dictionary::solution_t rc = dictionary::ilp_solve(pd, res);
+
+	std::ostringstream tos;
+	if (!f)
+	{
+		tos << base_dir << "/test" << test_num << ".output";
+	}
+	else
+	{
+		tos << base_dir << "/ilpTest" << test_num << ".output";
+	}
+	std::ifstream ifs(tos.str());
+	std::string x;
+	ifs >> x;
+
+	dictionary::solution_t out_rc = dictionary::eFINAL;
+	double out_res;
+	if (x[0] == 'U' || x[0] == 'u')
+	{
+		out_rc = dictionary::eUNBOUNDED;
+	}
+	else
+	{
+		if (x[0] == 'I' || x[0] == 'u')
+		{
+			out_rc = dictionary::eINFEASIBLE;
+		}
+		else
+		{
+			std::istringstream is(x);
+			is >> out_res;
+		}
+	}
+	if (out_rc != rc)
+	{
+		return false;
+	}
+	if (rc == dictionary::eFINAL)
+	{
+		double delta = std::abs(out_res - res);
+		return delta < 0.2;
+	}
+	return true;
+}
+// -------------------------------------------------------------------------------
+void run_test_4(const char* basedir)
+{
+	for (int i = 0; i < 100; i++)
+	{
+		try
+		{
+			if (!run_test_4(basedir, i, false))
+			{
+				std::cout << "ERROR: " << i << std::endl;
+			}
+			else
+			{
+				std::cout << i << std::endl;
+			}
+		}
+		catch (std::exception & e)
+		{
+			std::cout << i << ") " << e.what() << std::endl;
+		}
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		try
+		{
+			if (!run_test_4(basedir, i, true))
+			{
+				std::cout << "ERROR: ilp" << i << std::endl;
+			}
+			else
+			{
+				std::cout << "ilp" << i << std::endl;
+			}
+		}
+		catch (std::exception & e)
+		{
+			std::cout << "ilp" << i << ") " << e.what() << std::endl;
+		}
+	}
+	std::cout << "Done" << std::endl;
+}
+// -------------------------------------------------------------------------------
+void run_assignment_4(const std::string& base_dir, int test_num)
+{
+	std::ostringstream os;
+	os << base_dir << "/part" << test_num << ".dict";
+	problem_description pd(os.str().c_str());
+	double res;
+	dictionary::solution_t rc = dictionary::ilp_solve(pd, res);
+	std::ostringstream tos;
+	tos << base_dir << "/part" << test_num << ".output";
+	std::ofstream ofs(tos.str());
+
+	if (rc == dictionary::eFINAL)
+	{
+		ofs << res;
+	}
+	else
+	{
+		if (rc == dictionary::eUNBOUNDED)
+		{
+			ofs << "UNBOUNDED";
+		}
+		else
+		{
+			ofs << "INFEASIBLE";
+		}
+	}
+
+}
+// ---------------------------------------------------------------------------
+void run_assignment_4(const char* base)
+{
+	for (int i = 1; i <= 5; i++)
+	{
+		run_assignment_4(base, i);
+	}
+}
+// -------------------------------------------------------------------------------
 int main(int argc, char* argv[])
+{
+
+	
+	//run_test_4(argv[1]);
+	run_assignment_4(argv[1]);
+	
+	return 0;
+}
+// -------------------------------------------------------------------------------
+int main0(int argc, char* argv[])
 {
 	//run_test_3("d:\\proj\\lp\\part3TestCases\\unitTests\\50", 57);
 
